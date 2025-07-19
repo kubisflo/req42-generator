@@ -1,6 +1,32 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+    dependencies {
+        classpath "org.asciidoctor:asciidoctor-gradle-jvm:4.0.4"    
+    }
+}
+
+repositories {
+    mavenCentral()
+    gradlePluginPortal()
+}
+
+apply plugin: "org.asciidoctor.jvm.convert"
+
+allprojects {
+    tasks.withType(JavaExec) {
+        jvmArgs += [
+            '--add-opens', 'java.base/sun.nio.ch=ALL-UNNAMED',
+            '--add-opens', 'java.base/java.io=ALL-UNNAMED'
+        ]
+    }
+}
+
 import org.asciidoctor.gradle.jvm.AsciidoctorTask
 
-// // gradle build script for the arc42 template
+// // gradle build script for the req42 template
 // ("plain" subproject, creating the template without help text)
 //
 // free software - without guarantee, use at your own risk
@@ -9,25 +35,19 @@ import org.asciidoctor.gradle.jvm.AsciidoctorTask
 // set subproject build directory
 def localBuildDir = [:]
 
+
+def formats = project.config.formats
+
 def language = '%LANG%'
 def projectName = '%TYPE%'
-//if (!project?.ext?.config) {
-//    project.ext.config = new ConfigSlurper().parse file('buildconfig.groovy').text
-//}
-logger.info "*"*80
-logger.info project.name
-logger.info globalBuildDir
 
-config.formats.each { format, params ->
+formats.each { format, params ->
     localBuildDir[format] = globalBuildDir + '/'+language+'/'+format+'/' + projectName
+
     new File(localBuildDir[format]).mkdirs()
 }
 
-repositories {
-    mavenCentral()
-    gradlePluginPortal()
-}
-apply plugin: "org.asciidoctor.jvm.convert"
+defaultTasks 'req42'
 
 // common settings
 tasks.withType(AsciidoctorTask) { docTask ->
@@ -51,23 +71,22 @@ task copyAsciidoc (
     doLast {
         copy {
             from project.file('./src/.')
-            exclude('arc42-template.adoc')
+            exclude('req42-framework.adoc')
             into localBuildDir.asciidoc+"/src/."
         }
         copy {
             from project.file('./src/.')
-            include('arc42-template.adoc')
+            include('req42-framework.adoc')
             into localBuildDir.asciidoc
         }
     }
 }
-defaultTasks 'arc42'
 
 task copyImages(
         description: 'copy images into build output folder so that references can be resolved '
 ) {
     localBuildDir.each { format, dir ->
-        if (config.formats[format].imageFolder) {
+        if (formats[format].imageFolder) {
             def taskName = "copyImagesFor_" + projectName + "_" + language + "_" + format
             tasks.create(name: taskName, type: Copy) {
                 def outImgs = (format == 'mkdocs' ? '/docs/images' : '/images')
@@ -88,9 +107,9 @@ task generateHTML (
     type: AsciidoctorTask,
     dependsOn: [copyImages, copyAsciidoc],
     description: 'use html5 as asciidoc backend') {
+    sourceDir = file("src")
     sources {
-        file("src")
-        include 'arc42-template.adoc'
+        include 'req42-framework.adoc'
     }
     outputDir = new File( localBuildDir.html )
     outputOptions {
@@ -102,9 +121,9 @@ task generateDocbook (
         type: AsciidoctorTask,
         dependsOn: [copyImages, copyAsciidoc],
         description: 'use docbook as asciidoc backend') {
+    sourceDir = file("src")
     sources {
-        file("src")
-        include 'arc42-template.adoc'
+        include 'req42-framework.adoc'
     }
     if (localBuildDir.docbook) {
         outputDir = new File(localBuildDir.docbook)
@@ -154,16 +173,14 @@ task convert2Latex (
     args = ['-r','docbook',
         '-s',
         '-t','latex',
-        '-o',localBuildDir.latex+'/arc42-template-'+language+'.tex',
-        localBuildDir.docbook+'/arc42-template.xml']
+        '-o',localBuildDir.latex+'/req42-framework-'+language+'.tex',
+        localBuildDir.docbook+'/req42-framework.xml']
     if (language=='RU') {
         args += ['-V','fontenc=T1,T2A']
     } 
-    System.out.println("*"*80)
-    System.out.println args
-    System.out.println("*"*80)
+
     doLast {
-        def file = new File(localBuildDir.latex+'/arc42-template-'+language+'.tex')
+        def file = new File(localBuildDir.latex+'/req42-framework-'+language+'.tex')
         file.write(file.text.replaceAll("\u2009", " "))
     }
 }
@@ -174,53 +191,52 @@ task convert2Docx (
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','docx',
-            '-o',localBuildDir.docx+'/arc42-template-'+language+'.docx',
-            localBuildDir.docbook+'/arc42-template.xml']
+            '-o',localBuildDir.docx+'/req42-framework-'+language+'.docx',
+            localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2Epub (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','epub',
-            '-o',localBuildDir.epub+'/arc42-template-'+language+'.epub',
-        localBuildDir.docbook+'/arc42-template.xml']
+            '-o',localBuildDir.epub+'/req42-framework-'+language+'.epub',
+        localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2Rst (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','rst',
-            '-o',localBuildDir.rst+'/arc42-template-'+language+'.rst',
-        localBuildDir.docbook+'/arc42-template.xml']
+            '-o',localBuildDir.rst+'/req42-framework-'+language+'.rst',
+        localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2Markdown (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','markdown',
-            '-o',localBuildDir.markdown+'/arc42-template-'+language+'.md',
-        localBuildDir.docbook+'/arc42-template.xml']
+            '-o',localBuildDir.markdown+'/req42-framework-'+language+'.md',
+        localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2MarkdownStrict (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','markdown_strict',
-            '-o',localBuildDir.markdownStrict+'/arc42-template-'+language+'.md',
-        localBuildDir.docbook+'/arc42-template.xml']
-    System.out.println ">>>>>>>>> ${localBuildDir.markdownStrict}"
+            '-o',localBuildDir.markdownStrict+'/req42-framework-'+language+'.md',
+        localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2MarkdownMPStrict (
         dependsOn: [copyImages, generateDocbookMP ]
@@ -233,7 +249,7 @@ task convert2MarkdownMPStrict (
                 def taskName = 'convert2MarkdownStrict_file' + i++
                 new File(localBuildDir.markdownMPStrict + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'markdown_strict',
@@ -256,7 +272,7 @@ task convert2MarkdownMP (
                 def taskName = 'convert2Markdown_file' + i++
                 new File(localBuildDir.markdownMP + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'markdown',
@@ -272,12 +288,12 @@ task convert2GitHubMarkdown (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','gfm',
-            '-o',localBuildDir.gitHubMarkdown+'/arc42-template-'+language+'.md',
-        localBuildDir.docbook+'/arc42-template.xml']
+            '-o',localBuildDir.gitHubMarkdown+'/req42-framework-'+language+'.md',
+        localBuildDir.docbook+'/req42-framework.xml']
 }
 task convert2GitHubMarkdownMP (
         dependsOn: [copyImages, generateDocbookMP ]
@@ -290,7 +306,7 @@ task convert2GitHubMarkdownMP (
                 def taskName = 'convert2GitHubMarkdown_file' + i++
                 new File(localBuildDir.gitHubmarkdownMP + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'gfm',
@@ -306,11 +322,11 @@ task convert2Mkdocs (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
 ) {
-    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
     new File(localBuildDir.mkdocs + '/docs/').mkdirs()
     new File(localBuildDir.mkdocs + '/mkdocs.yml')
-        .write("""  |site_name: Arc42 Template
-                    |site_description: Software architecture documentation with arc42
+        .write("""  |site_name: req42 Template
+                    |site_description: Software requirement documentation with req42
                     |
                     |markdown_extensions:
                     |  - extra
@@ -346,7 +362,7 @@ task convert2Mkdocs (
         '--wrap=none',             // No text wrapping
         '--reference-links',       // Use reference-style links
         '-o', localBuildDir.mkdocs+'/docs/index.md',
-        localBuildDir.docbook+'/arc42-template.xml'
+        localBuildDir.docbook+'/req42-framework.xml'
     ]
 
     doLast {
@@ -357,7 +373,7 @@ task convert2Mkdocs (
                             |   - navigation
                             |---
                             |
-                            |# Arc42 Template
+                            |# req42 Template
                             |
                             |${indexContent}""".stripMargin())
     }
@@ -374,8 +390,8 @@ task convert2MkdocsMP (
                 def taskName = 'convert2Mkdocs_file' + i++
                 new File(localBuildDir.mkdocsMP + '/docs/').mkdirs()
                 new File(localBuildDir.mkdocsMP + '/mkdocs.yml')
-                    .write("""  |site_name: Arc42 Template
-                                |site_description: Software architecture documentation with arc42
+                    .write("""  |site_name: req42 Template
+                                |site_description: Software requirement documentation with req42
                                 |
                                 |markdown_extensions:
                                 |  - extra
@@ -400,9 +416,9 @@ task convert2MkdocsMP (
                                 |    - toc.follow
                                 |""".stripMargin())
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     def outfile = myFile.name-'xml'+'md'
-                    if (myFile.name == "arc42-template.xml") {
+                    if (myFile.name == "req42-framework.xml") {
                         outfile = 'index.md'
                     }
 
@@ -429,7 +445,7 @@ task convert2MkdocsMP (
         }
         def thePostTask = tasks.create(name: "convert2Mkdocs_post", type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
             new File(localBuildDir.mkdocsMP + '/docs/config.md').delete()
-            new File(localBuildDir.mkdocsMP + '/docs/about-arc42.md').delete()
+            new File(localBuildDir.mkdocsMP + '/docs/about-req42.md').delete()
             def indexFile = new File(localBuildDir.mkdocsMP + '/docs/index.md')
             def indexHeader = indexFile.getText('UTF-8').split(">.").first().substring(1).trim() + ">.\n\n"
             indexFile.withWriter('UTF-8') { out ->
@@ -460,7 +476,7 @@ task convert2Textile (
                 def taskName = 'convert2Textile_file' + i++
                 new File(localBuildDir.textile + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'textile',
@@ -493,9 +509,9 @@ task convert2Textile2 (
                 new File(myFile.canonicalPath+"2").write(newFile)
                 def taskName = 'convert2Textile2_file' + i++
                 new File(localBuildDir.textile2 + '/').mkdirs()
-                println rootDir.canonicalPath+'/width-filter-docBook.lua'
+
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    //commandLine "pandoc -r req42-framework.xml -o req42-framework.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'textile',
@@ -512,10 +528,11 @@ task export2Confluence (
 ) {
 
 }
-task arc42(
+
+task req42(
     dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Mkdocs, convert2MkdocsMP, convert2Textile, convert2Textile2, copyAsciidoc],
-    description: 'collects all required tasks for creating arc42 documentation',
-    group: 'arc42-template'
+    description: 'collects all required tasks for creating req42 documentation',
+    group: 'req42-framework'
 ) {
     doLast {
         println "globalBuildDir = ${globalBuildDir}"

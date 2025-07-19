@@ -1,19 +1,12 @@
 
 goldenMaster {
-    sourcePath = 'arc42-template/'
+    sourcePath = '../req42-framework/'
     targetPath = 'build/src_gen/'
 
-    // a list of all features contained in the golden master
-    allFeatures = ['help', 'example']
-
-    // style: list of features
-    templateStyles = [
-            'plain'    : [],
-            'with-help': ['help'],
-            // deactivated for the moment - no content yet
-            // 'with-examples':['help','example'],
-    ]
+    templateStyles = ['plain', 'with-help']
+    //templateStyles = ['plain']
 }
+
 formats = [
     'asciidoc': [imageFolder: true],
     'html': [imageFolder: true],
@@ -35,6 +28,6 @@ formats = [
 ]
 
 distribution {
-    targetPath = "arc42-template/dist/"
+    targetPath = "dist/"
     //formats = ['asciidoc','html','epub','markdown','docx','docbook']
 }

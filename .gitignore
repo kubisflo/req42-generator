@@ -1,4 +1,5 @@
 build
+dist
 .gradle
 *.iml
 /.nb-gradle/

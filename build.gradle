@@ -18,19 +18,21 @@ buildscript {
     }
 }
 
-
 // set common output directory for all subprojects
 def buildDirectory = layout.buildDirectory.get()
 project.ext.globalBuildDir = buildDirectory.asFile.canonicalPath
-
 logger.info "globalBuildDir = ${globalBuildDir}"
 
 project.description = """
-${'='*80}
-This project builds a set of different arc42-templates from the golden master (asciidoc)
-${'='*80}
+${'='*120}
+This project builds a set of different req42-frameworks from the golden master (asciidoc)
+${'='*120}
 """
+logger.info project.description
 
+// load the build configuration
+// this file contains the paths to the golden master and the target directories
+// as well as the features and template styles
 project.ext.config = new ConfigSlurper().parse file('buildconfig.groovy').text
 project.ext.languages = []
 new File(config.goldenMaster.sourcePath).eachDir { dir ->
@@ -41,95 +43,123 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
 
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
-    group: 'arc42-template'
+    group: 'req42-framework'
 )  {
 
     inputs.dir  file(config.goldenMaster.sourcePath)
     outputs.dir file(config.goldenMaster.targetPath+'/'+languages[0])
-
+    logger.info "inputs.dir: ${inputs.files}"
+    logger.info "outputs.dir: ${outputs.files}"
+        
     doLast {
         //convention over configuration:
         //let's fetch the available languages from the source dir
-        logger.lifecycle "found templates in the following languages: "+languages
         languages.each { language ->
             def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
             def sourceSub = file(pathToGoldenMaster+'/src/.')
             def sourceMain = file(pathToGoldenMaster+'/.')
-            logger.info "copy golden master from ${sourceMain.path} ..."
-            //the list of features/tags available in the golden master
-            def allFeatures = config.goldenMaster.allFeatures
-            //the template styles with their corresponding features
-            def templateStyles = config.goldenMaster.templateStyles
-            templateStyles.each { templateName, featuresWanted ->
-                def featuresToRemove = allFeatures - featuresWanted
-                def pathToTarget = config.goldenMaster.targetPath +'/'+language+'/asciidoc/'+ templateName
-                def target = file(pathToTarget + '/src/.')
-                target.mkdirs()
-                logger.info "                     to ${target.path}"
-                logger.lifecycle "create %buildDir%${target.path - buildDirectory}"
-                [sourceMain,sourceSub].each { source ->
+
+            config.goldenMaster.templateStyles.each { templateStyle ->
+                def pathToTargets = config.goldenMaster.targetPath + "/${language}/asciidoc/${templateStyle}"
+                def pathToTargetSrc = file(pathToTargets + "/src/.")
+                def pathToTargetImg = file(pathToTargets + "/images/.")
+                pathToTargetSrc.mkdirs()
+                pathToTargetImg.mkdirs()
+
+                [sourceMain, sourceSub].each { source ->
                     source.eachFile { sourceFile ->
                         if (sourceFile.name.endsWith('.adoc') || sourceFile.name.endsWith('.config')) {
-                            def targetFile = file(target.path + '/' + sourceFile.name)
+                            // create the target file name based on the source file name
+                            def targetFileName = pathToTargetSrc.path + "/" + sourceFile.name
+                            def targetFile = file(targetFileName)
+
+                            // read the template file and replace the req42help blocks
                             def template = sourceFile.getText('utf-8')
-                            featuresToRemove.each { feature ->
-                                template = template.replaceAll(/(?ms)\[role="arc42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
+
+                            if (templateStyle == 'plain') {
+                                template = template.replaceAll(/(?ms)\[role="req42help"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
                             }
-                            if ("help" in featuresToRemove) {
-                                template = template.replaceAll(/(?ms)ifdef::arc42help\[\]/, '')
-                                template = template.replaceAll(/(?ms)endif::arc42help\[\]/, '')
-                            }
+                            
+                            template = template.replaceAll(/(?ms)ifdef::req42help\[\]/, '')
+                            template = template.replaceAll(/(?ms)endif::req42help\[\]/, '')
+
+                            // write the processed template to the target file        
                             targetFile.write(template, 'utf-8')
                         }
                     }
                 }
-                def pathToDEGoldenMaster = config.goldenMaster.sourcePath + '/' + 'DE' + '/asciidoc/' 
-                //copy images
-                logger.info "copy images folder from " + pathToDEGoldenMaster + '/../../images'
-                logger.info "                     to " + pathToTarget + '/images'
-                if (templateName=='plain') {
-                    //only copy the logo
-                    copy {
-                        from pathToDEGoldenMaster + '/../../images/arc42-logo.png'
-                        into pathToTarget + '/images'
-                    }
-                } else {
-                    //copy logo plus example images
-                    copy {
-                        from pathToDEGoldenMaster + '/../../images/.'
-                        into pathToTarget + '/images'
-                        include "**/*-${language}.*"
-                        include "**/*-EN.*"
-                        include "**/arc42-logo.png"
-                    }
+
+                def pathToDEGoldenMaster = config.goldenMaster.sourcePath + "/DE/asciidoc/"
+                copy {
+                    from pathToDEGoldenMaster + "/../../images/."
+                    into pathToTargetImg
+                    include "**/*-${language}.*"
+                    include "**/REQ42-logo.png"
                 }
             }
         }
     }
 }
 
+allprojects {
+    tasks.withType(JavaExec) {
+        jvmArgs += [
+            '--add-opens', 'java.base/sun.nio.ch=ALL-UNNAMED',
+            '--add-opens', 'java.base/java.io=ALL-UNNAMED'
+        ]
+    }
+}
+
 task createDistribution (
     dependsOn: [],
     description: 'bundles the converted templates into downloadable zip files',
-    group: 'arc42-template'
+    group: 'req42-framework'
 ) {
+    inputs.dir file(config.goldenMaster.targetPath)
+   
+    // ensure the output directory exists
+    if (!file(config.distribution.targetPath).exists()) {
+        file(config.distribution.targetPath).mkdirs()
+    }
+    // set the output directory for the distribution task
+    // this is where the zip files will be created
+    // it is set to the distribution target path
+    // so that the zip files are created in the same directory
     outputs.dir file(config.distribution.targetPath)
+
     languages.each { language ->
-        config.goldenMaster.templateStyles.each { projectName, styles ->
-            def shortName = projectName.replaceAll("^.*[/\\\\]", "").replaceAll("[^a-zA-Z]", "")
+        def projectName = "req42-framework-${language}"
+
+        // Inline the template styles with their corresponding features
+        // and create a task for each combination of language, template style and format
+        // to create a zip file with the converted templates
+        config.goldenMaster.templateStyles.each { templateStyle ->
+
+            def shortName = templateStyle.replaceAll("^.*[/\\\\]", "").replaceAll("[^a-zA-Z]", "")
+
             config.formats.each { format, params ->
+                
                 def taskName = "createDistributionFor_${language}_${shortName}_$format"
-                println "name: $taskName"
+
                 tasks.create(name: taskName, type: Zip) {
-                    // ✅ Korrekt: .set() verwenden für Property-Objekte
                     archiveBaseName.set("req42-framework-${language}-${shortName}-$format")
-                    println "basename: ${archiveBaseName.get()}"
                     archiveFileName.set("${archiveBaseName.get()}.zip")
-                    println "arcname: ${archiveFileName.get()}"
+
                     destinationDirectory.set(file(config.distribution.targetPath))
+
+                    // Declare specific inputs
+                    def inputsDirectoryName = "./build/$language/$format/$templateStyle/"
+                    def inputsDirectory = file(inputsDirectoryName)
+                    inputs.dir inputsDirectory                    
+
+                    // Declare specific outputs
+                    outputs.file file("${config.distribution.targetPath}/${archiveBaseName.get()}.zip")
                     
+
+                    // include all files from the build directory for the given language and format
                     include "**/*"
-                    from "./build/$language/$format/$projectName"
+                    from inputsDirectory
+                    
                     doLast {}
                 }
                 tasks.createDistribution.dependsOn << taskName
@@ -137,7 +167,3 @@ task createDistribution (
         }
     }
 }
-
-
-//the following line does not work :-(
-//findProject('publish').tasks.publishGhPages.mustRunAfter createDistribution
