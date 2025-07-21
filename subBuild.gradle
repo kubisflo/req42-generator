@@ -1,22 +1,26 @@
-buildscript {
+
+
+    // these are the BUILDSCRIPT deps - required to execute
+    // build targets and -operations
     repositories {
         mavenCentral()
         gradlePluginPortal()
     }
+
     dependencies {
-        classpath "org.asciidoctor:asciidoctor-gradle-jvm:4.0.4"    
+        classpath( 'org.asciidoctor.jvm.convert:org.asciidoctor.jvm.convert.gradle.plugin:4.0.4' )
     }
+
+    plugins {
+    id 'org.asciidoctor.jvm.convert' version '4.0.2'
 }
 
-repositories {
-    mavenCentral()
-    gradlePluginPortal()
-}
-
+apply plugin: 'base'
 apply plugin: "org.asciidoctor.jvm.convert"
 
-allprojects {
-    tasks.withType(JavaExec) {
+tasks.withType(AsciidoctorTask) { docTask ->    
+    // Add JVM args for native subprocess control
+    forkOptions {
         jvmArgs += [
             '--add-opens', 'java.base/sun.nio.ch=ALL-UNNAMED',
             '--add-opens', 'java.base/java.io=ALL-UNNAMED'
@@ -43,6 +47,7 @@ def projectName = '%TYPE%'
 
 formats.each { format, params ->
     localBuildDir[format] = globalBuildDir + '/'+language+'/'+format+'/' + projectName
+    //println "localBuildDir[${format}] = ${localBuildDir[format]}"
 
     new File(localBuildDir[format]).mkdirs()
 }
@@ -90,8 +95,6 @@ task copyImages(
             def taskName = "copyImagesFor_" + projectName + "_" + language + "_" + format
             tasks.create(name: taskName, type: Copy) {
                 def outImgs = (format == 'mkdocs' ? '/docs/images' : '/images')
-                logger.info ">>>> copyImages from " + file('images')
-                logger.info ">>>>              to " + file(dir+outImgs)
                 inputs.dir file('images')
                 outputs.dir file(dir + outImgs)
                 from file('images')
@@ -108,6 +111,14 @@ task generateHTML (
     dependsOn: [copyImages, copyAsciidoc],
     description: 'use html5 as asciidoc backend') {
     sourceDir = file("src")
+
+/*
+    println "generateHTML task"
+    println "localBuildDir.html = ${localBuildDir.html}"
+    println "sourceDir = ${sourceDir}"
+    println "-" * 120
+*/
+
     sources {
         include 'req42-framework.adoc'
     }
@@ -118,35 +129,52 @@ task generateHTML (
 }
 
 task generateDocbook (
-        type: AsciidoctorTask,
-        dependsOn: [copyImages, copyAsciidoc],
-        description: 'use docbook as asciidoc backend') {
+    type: AsciidoctorTask,
+    dependsOn: [copyImages, copyAsciidoc],
+    description: 'use docbook as asciidoc backend') {
+    
+    inputs.dir file("src")
+    outputs.dir file(localBuildDir.docbook)
+    
     sourceDir = file("src")
     sources {
         include 'req42-framework.adoc'
     }
-    if (localBuildDir.docbook) {
-        outputDir = new File(localBuildDir.docbook)
-        outputOptions {
-            backends 'docbook'
-        }
-    } else {
-        println """
-    Failed to generate DocBook
-    it seems that a format which needs DocBook as intermediate format is configured in buildconfig.groovy
-    please add
-        'docbook': [imageFolder: true]
-    to the list of formats
-"""
-        //end with exception :-)
-        new File(localBuildDir.docbook)
+    
+    outputDir = new File(localBuildDir.docbook)
+    outputOptions {
+        backends 'docbook5'
+        setSeparateOutputDirs(false)
+    }
+
+    // Add required attributes
+    attributes(
+        'doctype': 'book',
+        'backend': 'docbook5',
+        'imagesdir': 'images'
+    )
+
+    // Add debug logging
+    doFirst {
+        logger.lifecycle "generateDocbook:"
+        logger.lifecycle "- sourceDir: ${sourceDir}"
+        logger.lifecycle "- outputDir: ${outputDir}"
+        logger.lifecycle "- input file exists: ${file("src/req42-framework.adoc").exists()}"
+        logger.lifecycle "- output dir exists: ${outputDir.exists()}"
+    }
+
+    doLast {
+        logger.lifecycle "generateDocbook output:"
+        logger.lifecycle "- created files: ${outputDir.listFiles()*.name}"
     }
 }
+
 //Multipage-Version
 task generateDocbookMP (
         type: AsciidoctorTask,
         dependsOn: [copyImages, copyAsciidoc],
         description: 'use docbook as asciidoc backend') {
+
     if (localBuildDir.docbook) {
         outputDir = new File(localBuildDir.docbook+'MP')
         outputOptions {
@@ -530,12 +558,13 @@ task export2Confluence (
 }
 
 task req42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Mkdocs, convert2MkdocsMP, convert2Textile, convert2Textile2, copyAsciidoc],
+    //dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Mkdocs, convert2MkdocsMP, convert2Textile, convert2Textile2, copyAsciidoc],
+    dependsOn: [copyImages, generateHTML, copyAsciidoc],
     description: 'collects all required tasks for creating req42 documentation',
     group: 'req42-framework'
 ) {
     doLast {
-        println "globalBuildDir = ${globalBuildDir}"
-        println "localBuildDir = ${localBuildDir}"
+        // println "globalBuildDir = ${globalBuildDir}"
+        // println "localBuildDir = ${localBuildDir}"
     }
 }

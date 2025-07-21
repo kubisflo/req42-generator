@@ -1,4 +1,4 @@
-rm -r build
+rm -r build/*
 rm -r dist/*
 rm -rf null
 

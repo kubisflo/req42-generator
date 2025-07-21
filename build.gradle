@@ -3,9 +3,7 @@
 // free software - without guarantee, use at your own risk
 // ========================================================
 
-apply plugin: 'base'
 
-buildscript {
     // these are the BUILDSCRIPT deps - required to execute
     // build targets and -operations
     repositories {
@@ -15,8 +13,17 @@ buildscript {
 
     dependencies {
         classpath( 'org.asciidoctor.jvm.convert:org.asciidoctor.jvm.convert.gradle.plugin:4.0.4' )
+        classpath( 'org.codehaus.groovy:groovy-all:3.0.13' )
     }
+
+    plugins {
+    id 'org.asciidoctor.jvm.convert' version '4.0.2'
 }
+
+apply plugin: 'base'
+apply plugin: "org.asciidoctor.jvm.convert"
+
+import groovy.util.ConfigSlurper
 
 // set common output directory for all subprojects
 def buildDirectory = layout.buildDirectory.get()
@@ -33,7 +40,7 @@ logger.info project.description
 // load the build configuration
 // this file contains the paths to the golden master and the target directories
 // as well as the features and template styles
-project.ext.config = new ConfigSlurper().parse file('buildconfig.groovy').text
+project.ext.config = new ConfigSlurper().parse(file('buildconfig.groovy').text)
 project.ext.languages = []
 new File(config.goldenMaster.sourcePath).eachDir { dir ->
     if (dir.name =~ /^[A-Z]{2}$/) {
@@ -101,15 +108,6 @@ task createTemplatesFromGoldenMaster (
     }
 }
 
-allprojects {
-    tasks.withType(JavaExec) {
-        jvmArgs += [
-            '--add-opens', 'java.base/sun.nio.ch=ALL-UNNAMED',
-            '--add-opens', 'java.base/java.io=ALL-UNNAMED'
-        ]
-    }
-}
-
 task createDistribution (
     dependsOn: [],
     description: 'bundles the converted templates into downloadable zip files',
@@ -155,7 +153,6 @@ task createDistribution (
                     // Declare specific outputs
                     outputs.file file("${config.distribution.targetPath}/${archiveBaseName.get()}.zip")
                     
-
                     // include all files from the build directory for the given language and format
                     include "**/*"
                     from inputsDirectory
